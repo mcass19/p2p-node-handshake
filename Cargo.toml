@@ -8,5 +8,3 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 bitcoin = "0.30.1"
-byteorder = "1.4.3"
-chrono = "0.4.31"

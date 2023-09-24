@@ -1,122 +1,152 @@
-use bitcoin::network::message::NetworkMessage;
-use byteorder::LittleEndian;
-use std::error::Error;
+use bitcoin::consensus::{deserialize_partial, encode::serialize};
+use bitcoin::network::address::Address;
+use bitcoin::network::constants::{Magic, ServiceFlags};
+use bitcoin::network::message::{NetworkMessage, RawNetworkMessage};
+use bitcoin::network::message_network::VersionMessage;
+use std::{
+    error::Error,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // Replace with the actual Bitcoin node's IP address and port
-    let bitcoin_node_address = "217.76.51.25:8333";
+    // Replace with the actual Bitcoin node's IP address, port and user agent
+    let bitcoin_node_address = "94.231.253.18:8333";
+    let user_agent = "/Satoshi:25.0.0/";
 
-    // Connect to the Bitcoin node
     let mut socket = TcpStream::connect(bitcoin_node_address).await?;
     println!("Connected to Bitcoin node at {}", bitcoin_node_address);
 
-    // Perform the Bitcoin handshake
-    if let Err(err) = perform_bitcoin_handshake(&mut socket).await {
+    if let Err(err) = perform_bitcoin_handshake(
+        &mut socket,
+        bitcoin_node_address.to_string(),
+        user_agent.to_string(),
+    )
+    .await
+    {
         eprintln!("Bitcoin handshake failed: {}", err);
         return Ok(());
     }
 
     println!("Bitcoin handshake successful!");
 
-    // You can now communicate with the Bitcoin node
+    // You can now further communicate with the Bitcoin node
 
     Ok(())
 }
 
-async fn perform_bitcoin_handshake(socket: &mut TcpStream) -> Result<(), Box<dyn Error>> {
-    // Bitcoin handshake protocol:
-    // 1. Send a version message
-    // 2. Receive a version message from the Bitcoin node
-    // 3. Send a verack message
-    // 4. Receive a verack message
-
+async fn perform_bitcoin_handshake(
+    socket: &mut TcpStream,
+    bitcoin_node_address: String,
+    user_agent: String,
+) -> Result<(), Box<dyn Error>> {
     // Prepare and send the version message
-    let version_message = create_version_message();
+    let version_message = create_version_message(bitcoin_node_address, user_agent);
     send_message(socket, &version_message).await?;
 
-    // Receive and validate the version message from the Bitcoin node
-    let received_version_message = receive_message(socket).await?;
-    validate_version_message(&received_version_message)?;
+    // Continuously listen for incoming messages
+    loop {
+        let received_message = receive_message(socket).await?;
 
-    // Send the verack message
-    send_message(socket, &NetworkMessage::Verack).await?;
+        match received_message.payload {
+            NetworkMessage::Version(version_msg) => {
+                println!("Received Version message: {:?}", version_msg);
 
-    // Receive and validate the verack message from the Bitcoin node
-    let received_verack_message = receive_message(socket).await?;
-    validate_verack_message(&received_verack_message)?;
+                let verack_message = create_verack_message();
+                send_message(socket, &verack_message).await?;
+            }
+            NetworkMessage::Ping(nonce) => {
+                println!("Received Ping message - nonce: {:?}", nonce);
 
-    Ok(())
+                let pong_message = create_pong_message(nonce);
+                send_message(socket, &pong_message).await?;
+            }
+            NetworkMessage::Verack => {
+                println!("Received Verack message");
+
+                return Ok(());
+            }
+            other_message => {
+                return Err(format!(
+                    "Unexpected message type during handshake: {:?}",
+                    other_message
+                )
+                .into());
+            }
+        }
+    }
 }
 
-fn create_version_message() -> NetworkMessage {
-    // Create a simplified version message (you can add more details)
-    NetworkMessage::Version(bitcoin::network::message::NetworkMessage {
-        version: 70015, // Protocol version
-        services: 1,    // Service flags (e.g., NODE_NETWORK)
-        timestamp: chrono::Utc::now().timestamp() as i64,
-        receiver: bitcoin::network::address::Address::new(
-            bitcoin::network::constants::ServiceFlags::NETWORK,
-            std::net::SocketAddr::from(([0, 0, 0, 0], 8333)),
-        ),
-        sender: bitcoin::network::address::Address::new(
-            bitcoin::network::constants::ServiceFlags::NETWORK,
-            std::net::SocketAddr::from(([0, 0, 0, 0], 8333)),
-        ),
-        nonce: 1234567890, // Random nonce
-        user_agent: String::from("MyRustClient"),
-        start_height: 0,
-        relay: false,
-    })
-}
-
+// ---
+// Send and receive
 async fn send_message(
     socket: &mut TcpStream,
-    message: &NetworkMessage,
+    message: &RawNetworkMessage,
 ) -> Result<(), Box<dyn Error>> {
-    let serialized_message = message.serialize();
-    socket.write_all(&serialized_message).await?;
+    let serialized_message = serialize(message);
+    socket.write_all(serialized_message.as_slice()).await?;
+
     Ok(())
 }
 
-async fn receive_message(socket: &mut TcpStream) -> Result<NetworkMessage, Box<dyn Error>> {
+async fn receive_message(socket: &mut TcpStream) -> Result<RawNetworkMessage, Box<dyn Error>> {
     let mut header = [0u8; 24];
-    socket.read_exact(&mut header).await?;
+    socket.read(&mut header).await?;
 
-    let payload_length = (&header[16..20]).read_u32::<LittleEndian>()? as usize;
-    let mut payload = vec![0u8; payload_length];
-    socket.read_exact(&mut payload).await?;
+    let mut payload = [0u8; 442];
+    socket.read(&mut payload).await?;
 
     let raw_message = [&header[..], &payload[..]].concat();
-    let network_message = NetworkMessage::deserialize(&raw_message)?;
+    let (network_message, _consumed) = deserialize_partial(&raw_message)?;
 
     Ok(network_message)
 }
 
-fn validate_version_message(message: &NetworkMessage) -> Result<(), Box<dyn Error>> {
-    match message {
-        NetworkMessage::Version(version_msg) => {
-            // Add validation checks for the version message here
-            // Example: Check protocol version, services, user agent, etc.
+// ---
+// Version message
+pub fn create_version_message(dest_socket: String, user_agent: String) -> RawNetworkMessage {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
 
-            println!("Received Version message: {:?}", version_msg);
-            Ok(())
-        }
-        _ => Err("Unexpected message type during version handshake".into()),
+    let no_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+    let node_socket = SocketAddr::from_str(&dest_socket).unwrap();
+
+    let version = VersionMessage::new(
+        ServiceFlags::NONE,
+        now,
+        Address::new(&node_socket, ServiceFlags::NONE),
+        Address::new(&no_address, ServiceFlags::NONE),
+        now as u64,
+        user_agent.to_owned(),
+        0,
+    );
+
+    RawNetworkMessage {
+        magic: Magic::BITCOIN,
+        payload: NetworkMessage::Version(version),
     }
 }
 
-fn validate_verack_message(message: &NetworkMessage) -> Result<(), Box<dyn Error>> {
-    match message {
-        NetworkMessage::Verack => {
-            // Add validation checks for the verack message here
-            // Example: Ensure it's a Verack message
+// ---
+// Verack message
+fn create_verack_message() -> RawNetworkMessage {
+    RawNetworkMessage {
+        magic: Magic::BITCOIN,
+        payload: NetworkMessage::Verack,
+    }
+}
 
-            println!("Received Verack message");
-            Ok(())
-        }
-        _ => Err("Unexpected message type during verack handshake".into()),
+// ---
+// Pong message
+fn create_pong_message(nonce: u64) -> RawNetworkMessage {
+    RawNetworkMessage {
+        magic: Magic::BITCOIN,
+        payload: NetworkMessage::Pong(nonce),
     }
 }

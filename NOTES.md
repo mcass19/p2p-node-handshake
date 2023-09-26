@@ -12,14 +12,18 @@ while leaving the `main.rs` just for the application code.
 ├── src
 │   ├── lib.rs   ## The lib crate.
 │   ├── main.rs  ## The application main crate.
-│   └── p2p.rs   ## The P2P module.
+│   ├── p2p      ## The P2P submodules.
+│   │   ├── btc.rs
+│   └── p2p.rs ## The P2P module.
 ├── tests
-│   └── real_connection_test.rs ## test that reaches real nodes.
+│   └── real_connection_test.rs ## The test that reaches real nodes.
 ```
 
-### Async Rust program
+### Async Rust program with multiple node adresses
 
 This tool is going to interact with the network. Thats an IO-bound task in which certain concurrency/parallelism levels can improve performance, so we are going to use the well known [tokio](https://tokio.rs/) async runtime.
+
+Since we will have the logic for executing one handshake, it should not be a problem to allow passing multiple node address and process each handshake concurrently. Tokio makes this an easy task for us.
 
 ### Bitcoin handshake
 
@@ -27,11 +31,7 @@ The first implementation for the `p2p-node-handshake` project will be the [Bitco
 
 We are going to use the rust [bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) library, as it already provides the network messages types and serialization/deserialization capabilities out of the box.
 
-We are already seeing a growth path for the project, which is to move the specific bitcoin handshake to a separate module (inside a `p2p` folder), so we can extend the handshakes implementations with other protocols.
-
-### Ability to pass multiple node address
-
-Since we have the logic for executing one handshake, it should not be a problem to allow passing multiple node address and process each handshake concurrently. Tokio makes this an easy task for us.
+We are already seeing a growth path for the project, since we can extend the handshakes implementations with other protocols, adding them below the `p2p` folder, and accounting for them in the `p2p` module.
 
 ### Processing messages -> TO DO write
 

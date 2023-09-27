@@ -9,12 +9,14 @@ If you are interested in how this project was designed and further explanation, 
 Full example usage and output:
 
 ```bash
-cargo run
+› NODE_ADDRESSES="195.123.221.104:8333 89.177.13.137:8333 54.144.114.87:8333" USER_AGENT="/Satoshi:25.0.0/" cargo run
 
-Connected to Bitcoin node at <ip_address:port>
-Received Version message: VersionMessage { version: 70016, services: ServiceFlags(1101), timestamp: 1695733006, receiver: Address {services: ServiceFlags(NONE), address: 64.246.65.129, port: 53729}, sender: Address {services: ServiceFlags(NETWORK|BLOOM|WITNESS|COMPACT_FILTERS|NETWORK_LIMITED), address: 0.0.0.0, port: 0}, nonce: 17875138075366979079, user_agent: "/Satoshi:25.0.0/", start_height: 809430, relay: true }
-Received Verack message
-Bitcoin handshake successful!
+Connected to Bitcoin node at "54.144.114.87:8333"
+Connected to Bitcoin node at "195.123.221.104:8333"
+Connected to Bitcoin node at "89.177.13.137:8333"
+✅ 195.123.221.104:8333: Bitcoin handshake successful!
+❌ 89.177.13.137:8333: P2P Error: deadline has elapsed
+✅ 54.144.114.87:8333: Bitcoin handshake successful!
 ```
 
 ## How to run

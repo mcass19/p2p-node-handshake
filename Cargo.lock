@@ -183,6 +183,7 @@ name = "p2p-node-handshake"
 version = "0.1.0"
 dependencies = [
  "bitcoin",
+ "bytes",
  "tokio",
 ]
 

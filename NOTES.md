@@ -1,11 +1,8 @@
 # Project Notes
 
-Lets record here all the relevant decisions for this project. This document is intended to change over time.
+Lets record here all the relevant decisions and information for this project.
 
 ### Structure
-
-The current project structure favours the placement of reusable elements as part of the `lib.rs` crate,
-while leaving the `main.rs` just for the application code.
 
 ```bash
 .
@@ -13,33 +10,31 @@ while leaving the `main.rs` just for the application code.
 │   ├── lib.rs   ## The lib crate.
 │   ├── main.rs  ## The application main crate.
 │   ├── p2p      ## The P2P submodules.
-│   │   ├── btc.rs
+│   │   ├── btc.rs ## The Bitcoin implementation.
 │   └── p2p.rs ## The P2P module.
 ├── tests
 │   └── real_connection_test.rs ## The test that reaches real nodes.
 ```
 
-### Async Rust program with multiple node adresses
+### Rust program with concurrent node handshakes
 
-This tool is going to interact with the network. Thats an IO-bound task in which certain concurrency/parallelism levels can improve performance, so we are going to use the well known [tokio](https://tokio.rs/) async runtime.
+This tool is going to interact with the network, in which certain concurrency/parallelism levels can improve performance and stability, so we are going to use the well known [tokio](https://tokio.rs/) async runtime.
 
-Since we will have the logic for executing one handshake, it should not be a problem to allow passing multiple node address and process each handshake concurrently. Tokio makes this an easy task for us.
+Once we have the logic for executing one handshake, Tokio makes an easy task to allow passing multiple node address and process each handshake in parallel. Currently, each node will have a hardcoded timeout to not wait forever for the node and block the program.
 
-### Bitcoin handshake
+### The Bitcoin one
 
-The first implementation for the `p2p-node-handshake` project will be the [Bitcoin handshake](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch08.asciidoc#network_handshake).
+The first implementation for the project will be the [Bitcoin handshake](https://github.com/bitcoinbook/bitcoinbook/blob/develop/ch08.asciidoc#network_handshake).
 
-We are going to use the rust [bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) library, as it already provides the network messages types and serialization/deserialization capabilities out of the box.
+We are going to use the rust [bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) library, as it already provides the network messages types and serialization/deserialization capabilities out of the box. So we don't need to put extra focus on a lower level implementation, which makes sense for the scope of the project for now.
 
-We are already seeing a growth path for the project, since we can extend the handshakes implementations with other protocols, adding them below the `p2p` folder, and accounting for them in the `p2p` module.
+### Processing messages
 
-### Processing messages -> TO DO write
+We are using a mutable growing buffer [BytesMut](https://docs.rs/bytes/latest/bytes/struct.BytesMut.html) for bringing the message bytes from network to memory and parse them accordingly.
 
-Currently we are using a mutable growing buffer [BytesMut](https://docs.rs/bytes/latest/bytes/struct.BytesMut.html) for bringing the message bytes from the network to memory, so we can parse them accordingly. The initial buffer size its currently hardcoded to 1024 bytes, being a complete handshake around 342 bytes. It should be enough for a complete handshake without the need of growing the buffer, so no more allocations than the initial one.
+The initial buffer size is hardcoded to 1024 bytes, which should be really enough for a complete handshake without the need of growing the buffer and allocate more memorym, as we are pre-allocating all the needed memory beforehand.
 
 After a message its successfully parsed from its binary representation, its data and the buffer part it occupies are automatically discarded.
-
-Another alternative idea (not implemented here) would be to make use of a [circular buffer](https://en.wikipedia.org/wiki/Circular_buffer) implementation. That would avoid the costs of allocating more space as we go by reusing the already allocated but discarded one. So instead of discarding old parts of the buffer with the consequent future allocation, they would just be overwritten, using cursors to control what data is still valid or not. As commented, the current implementation is considered good enough for now, as we are pre-allocating all the needed memory beforehand.
 
 ### Error handling
 
@@ -54,6 +49,20 @@ Here the strategy for dealing with errors its very simple, creating a `P2PError`
 
 The testing could be improved a lot.
 Currently is reaching real servers in order to assess the program is working correctly, which could be an impediment for local development for many reasons. A possible solution would be to build a mock server for emulating the real ones, and also be able to test other edge case scenarios like network timeouts.
+
+### Formatting
+
+`cargo fmt`
+
+### Future work
+
+- More than just bitcoin
+  We are already seeing a growth path for the project, since we can extend the handshakes implementations with other protocols, adding them below the `p2p` folder, and accounting for them in the `p2p` module.
+- Better present of the info in the console
+- Testing
+- Make a CLI
+- Trigger processes for reading/writing from the socket, and create channels
+- Timeout
 
 ### Main references
 

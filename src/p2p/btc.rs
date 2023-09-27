@@ -8,6 +8,7 @@ use bitcoin::{
         message_network::VersionMessage,
     },
 };
+use bytes::{Buf, BytesMut};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
@@ -30,33 +31,28 @@ pub async fn perform_bitcoin_handshake(
     let version_message = create_version_message(bitcoin_node_address, user_agent);
     send_message(&mut socket, &version_message).await?;
 
-    // Continuously listen for incoming messages
     loop {
         let received_message = receive_message(&mut socket).await?;
 
         match received_message.payload {
-            NetworkMessage::Version(version_msg) => {
-                println!("Received Version message: {:?}", version_msg);
-
+            NetworkMessage::Version(_version_msg) => {
+                // println!("Received Version message: {:?}", version_msg);
                 let verack_message = create_verack_message();
                 send_message(&mut socket, &verack_message).await?;
             }
             NetworkMessage::Ping(nonce) => {
-                println!("Received Ping message - nonce: {:?}", nonce);
-
+                // println!("Received Ping message - nonce: {:?}", nonce);
                 let pong_message = create_pong_message(nonce);
                 send_message(&mut socket, &pong_message).await?;
             }
             NetworkMessage::Verack => {
-                println!("Received Verack message");
-                println!("{}", SUCCESS_MESSAGE);
-
+                // println!("Received Verack message. {}", SUCCESS_MESSAGE);
                 return Ok(SUCCESS_MESSAGE.to_string());
             }
-            other_message => println!(
-                "Unexpected message type during handshake: {:?}",
-                other_message
-            ),
+            _other_message => {
+                // println!("Unexpected message type during handshake: {:?}", other_message);
+                continue;
+            }
         }
     }
 }
@@ -71,16 +67,17 @@ async fn send_message(socket: &mut TcpStream, message: &RawNetworkMessage) -> Re
 }
 
 async fn receive_message(socket: &mut TcpStream) -> Result<RawNetworkMessage, P2PError> {
-    let mut header = [0u8; 24];
-    socket.read(&mut header).await?;
+    let mut buffer = BytesMut::with_capacity(1024);
 
-    let mut payload = [0u8; 442];
-    socket.read(&mut payload).await?;
+    loop {
+        socket.read_buf(&mut buffer).await?;
 
-    let raw_message = [&header[..], &payload[..]].concat();
-    let (network_message, _consumed) = deserialize_partial(&raw_message)?;
+        if let Ok((message, count)) = deserialize_partial::<RawNetworkMessage>(&buffer) {
+            buffer.advance(count);
 
-    Ok(network_message)
+            return Ok(message);
+        }
+    }
 }
 
 // ---

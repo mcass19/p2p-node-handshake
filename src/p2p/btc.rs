@@ -21,16 +21,18 @@ use tokio::{
 
 pub const SUCCESS_MESSAGE: &str = "Bitcoin handshake successful!";
 
-pub async fn perform_bitcoin_handshake(
+pub async fn perform_handshake(
     bitcoin_node_address: String,
     user_agent: String,
 ) -> Result<String, P2PError> {
     let mut socket = TcpStream::connect(&bitcoin_node_address).await?;
     println!("Connected to Bitcoin node at {:?}", bitcoin_node_address);
 
+    // Trigger the handshake by sending the first version message
     let version_message = create_version_message(bitcoin_node_address, user_agent);
     send_message(&mut socket, &version_message).await?;
 
+    // Continuously listening for messages, until a verack is received
     loop {
         let received_message = receive_message(&mut socket).await?;
 

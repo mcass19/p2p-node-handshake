@@ -11,7 +11,7 @@ async fn main() {
     let user_agent = env::var("USER_AGENT").unwrap_or("/Satoshi:25.0.0/".to_string());
 
     match perform_handshake(nodes_addrs, user_agent).await {
-        Ok(result) => result.iter().for_each(|res| println!("{}", res)),
+        Ok(results) => results.iter().for_each(|result| println!("{}", result)),
         Err(err) => println!("{}", err),
     }
 }

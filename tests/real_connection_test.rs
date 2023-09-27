@@ -2,7 +2,7 @@ use p2p_node_handshake::p2p::{btc::SUCCESS_MESSAGE, perform_handshake, P2PResult
 use std::env;
 
 #[tokio::test]
-async fn it_perform_bitcoin_handshake() {
+async fn it_performs_bitcoin_handshake() {
     let nodes_addrs: Vec<String> = env::var("NODE_ADDRESSES")
         .unwrap_or("185.202.236.25:8333".to_string())
         .split_whitespace()

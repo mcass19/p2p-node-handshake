@@ -14,6 +14,7 @@ pub async fn perform_handshake(
     user_agent: String,
 ) -> Result<Vec<P2PResult>, P2PError> {
     let mut results = Vec::new();
+
     let joins: Vec<(String, JoinHandle<Result<String, P2PError>>)> = node_addresses
         .iter()
         .map(|node_addr| {
@@ -23,7 +24,7 @@ pub async fn perform_handshake(
             let join = tokio::spawn(async {
                 tokio::time::timeout(
                     Duration::from_secs(10), // arbitrary number, could be configurable
-                    btc::perform_bitcoin_handshake(owned_node_addr, owned_user_agent),
+                    btc::perform_handshake(owned_node_addr, owned_user_agent), // could be other implementations apart from btc
                 )
                 .await?
             });
